@@ -176,10 +176,10 @@ func (r *hibernationReconciler) Reconcile(ctx context.Context, request reconcile
 	if !cd.Spec.Installed {
 		return reconcile.Result{}, nil
 	}
-	// If cluster is fake, skip any processing
-	if controllerutils.IsFakeCluster(cd) {
-		return reconcile.Result{}, nil
-	}
+	//// If cluster is fake, skip any processing
+	//if controllerutils.IsFakeCluster(cd) {
+	//	return reconcile.Result{}, nil
+	//}
 
 	// set hibernating condition to false for unsupported clouds
 	if supported, msg := r.hibernationSupported(cd); !supported {
@@ -421,6 +421,9 @@ func (r *hibernationReconciler) getActuator(cd *hivev1.ClusterDeployment) Hibern
 }
 
 func (r *hibernationReconciler) hibernationSupported(cd *hivev1.ClusterDeployment) (bool, string) {
+	if cd.Spec.Platform.Azure != nil {
+		return false, fmt.Sprintf("Unsupported version, need version %s or greater", minimumClusterVersion.String())
+	}
 	if r.getActuator(cd) == nil {
 		return false, "Unsupported platform: no actuator to handle it"
 	}

@@ -65,7 +65,6 @@ var (
 		hivev1.InstallLaunchErrorCondition,
 		hivev1.DeprovisionLaunchErrorCondition,
 		hivev1.ProvisionStoppedCondition,
-		hivev1.AuthenticationFailureClusterDeploymentCondition,
 		hivev1.RequirementsMetCondition,
 		hivev1.ProvisionedCondition,
 
@@ -672,7 +671,7 @@ func (r *ReconcileClusterDeployment) reconcile(request reconcile.Request, cd *hi
 		return reconcile.Result{}, err
 	}
 	// Make sure the condition is set properly.
-	_, err = r.setAuthenticationFailure(cd, validCreds, cdLog)
+	_, err = r.setReqsMetConditionAuthenticationFailure(cd, validCreds, cdLog)
 	if err != nil {
 		cdLog.WithError(err).Error("unable to update clusterdeployment")
 		return reconcile.Result{}, err
@@ -1066,24 +1065,24 @@ func (r *ReconcileClusterDeployment) updateCondition(
 	return r.Status().Update(context.TODO(), cd)
 }
 
-func (r *ReconcileClusterDeployment) setAuthenticationFailure(cd *hivev1.ClusterDeployment, authSuccessful bool, cdLog log.FieldLogger) (bool, error) {
+func (r *ReconcileClusterDeployment) setReqsMetConditionAuthenticationFailure(cd *hivev1.ClusterDeployment, authSuccessful bool, cdLog log.FieldLogger) (bool, error) {
 
 	var status corev1.ConditionStatus
 	var reason, message string
 
 	if authSuccessful {
-		status = corev1.ConditionFalse
+		status = corev1.ConditionUnknown
 		reason = platformAuthSuccessReason
 		message = "Platform credentials passed authentication check"
 	} else {
-		status = corev1.ConditionTrue
+		status = corev1.ConditionFalse
 		reason = platformAuthFailureReason
 		message = "Platform credentials failed authentication check"
 	}
 
 	conditions, changed := controllerutils.SetClusterDeploymentConditionWithChangeCheck(
 		cd.Status.Conditions,
-		hivev1.AuthenticationFailureClusterDeploymentCondition,
+		hivev1.RequirementsMetCondition,
 		status,
 		reason,
 		message,

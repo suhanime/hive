@@ -382,9 +382,6 @@ const (
 	// and the controllers can begin the cluster install.
 	RequirementsMetCondition ClusterDeploymentConditionType = "RequirementsMet"
 
-	// AuthenticationFailureCondition is true when platform credentials cannot be used because of authentication failure
-	AuthenticationFailureClusterDeploymentCondition ClusterDeploymentConditionType = "AuthenticationFailure"
-
 	// AWSPrivateLinkReadyClusterDeploymentCondition is true when private link access has been
 	// setup for the cluster.
 	AWSPrivateLinkReadyClusterDeploymentCondition ClusterDeploymentConditionType = "AWSPrivateLinkReady"

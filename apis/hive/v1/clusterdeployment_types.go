@@ -446,9 +446,6 @@ const (
 	// FailedToStopHibernationReason is used when there was an error stopping machines
 	// to enter hibernation
 	FailedToStopHibernationReason = "FailedToStop"
-	// FailedToStartHibernationReason is used when there was an error starting machines
-	// to leave hibernation
-	FailedToStartHibernationReason = "FailedToStart"
 	// SyncSetsNotAppliedReason is used as the reason when SyncSets have not yet been applied
 	// for the cluster based on ClusterSync.Status.FirstSucessTime
 	SyncSetsNotAppliedReason = "SyncSetsNotApplied"
@@ -460,6 +457,9 @@ const (
 	// StoppingOrHibernatingReadyReason is used as the reason for the Ready condition when the cluster
 	// is stopping or hibernating. Precise details are available in the Hibernating condition.
 	StoppingOrHibernatingReadyReason = "StoppingOrHibernating"
+	// FailedToStartMachinesReadyReason is used when there was an error starting machines
+	// to leave hibernation
+	FailedToStartMachinesReadyReason = "FailedToStartMachines"
 	// WaitingForMachinesReadyReason is used on the Ready condition when waiting for cloud VMs to start.
 	WaitingForMachinesReadyReason = "WaitingForMachines"
 	// WaitingForNodesReadyReason is used on the Ready condition when waiting for nodes to become Ready.

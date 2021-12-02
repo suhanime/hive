@@ -87,6 +87,15 @@ var (
 		},
 		[]string{"cluster_deployment", "namespace", "cluster_type"},
 	)
+	// metricClusterPowerStateTransitionSeconds is a prometheus metric that tracks the number of seconds it takes for a
+	// clusters to transition to their desired powerstate
+	metricClusterPowerStateTransitionSeconds = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "hive_cluster_deployment_powerstate_transition_seconds",
+			Help:    "Distribution of the length of time for clusters to transition to the desired power state",
+			Buckets: []float64{1, 10, 30, 60, 180, 300, 600},
+		},
+		[]string{"cluster_version", "platform", "cluster_pool"})
 	// metricControllerReconcileTime tracks the length of time our reconcile loops take. controller-runtime
 	// technically tracks this for us, but due to bugs currently also includes time in the queue, which leads to
 	// extremely strange results. For now, track our own metric.
@@ -224,6 +233,21 @@ func (mc *Calculator) Start(ctx context.Context) error {
 					if cleared {
 						mcLog.Infof("cleared metric: %v", metricClusterDeploymentSyncsetPaused)
 					}
+				}
+
+				// Check if cluster is transitioning
+				hibernatingCond := controllerutils.FindClusterDeploymentCondition(cd.Status.Conditions, hivev1.ClusterHibernatingCondition)
+				readyCond := controllerutils.FindClusterDeploymentCondition(cd.Status.Conditions, hivev1.ClusterReadyCondition)
+				if hibernatingCond.Reason == hivev1.ResumingOrRunningHibernationReason &&
+					readyCond.Reason != hivev1.RunningReadyReason {
+					metricClusterPowerStateTransitionSeconds.WithLabelValues(cd.Labels[constants.VersionMajorMinorPatchLabel],
+						getCloudPlatform(cd.Spec.Platform),
+						cd.Spec.ClusterPoolRef.PoolName).Observe(time.Since(hibernatingCond.LastTransitionTime.Time).Seconds())
+				} else if readyCond.Reason == hivev1.StoppingOrHibernatingReadyReason &&
+					hibernatingCond.Reason != hivev1.HibernatingHibernationReason {
+					metricClusterPowerStateTransitionSeconds.WithLabelValues(cd.Labels[constants.VersionMajorMinorPatchLabel],
+						getCloudPlatform(cd.Spec.Platform),
+						cd.Spec.ClusterPoolRef.PoolName).Observe(time.Since(readyCond.LastTransitionTime.Time).Seconds())
 				}
 			}
 
@@ -538,6 +562,34 @@ func (ca *clusterAccumulator) processCluster(cd *hivev1.ClusterDeployment) {
 			ca.addConditionToMap(cond.Type, clusterType)
 		}
 	}
+}
+
+func getCloudPlatform(platform hivev1.Platform) string {
+	if platform.AWS != nil {
+		return "aws"
+	}
+	if platform.Azure != nil {
+		return "azure"
+	}
+	if platform.BareMetal != nil {
+		return "baremetal"
+	}
+	if platform.GCP != nil {
+		return "gcp"
+	}
+	if platform.OpenStack != nil {
+		return "openstack"
+	}
+	if platform.VSphere != nil {
+		return "vsphere"
+	}
+	if platform.Ovirt != nil {
+		return "ovirt"
+	}
+	if platform.AgentBareMetal != nil {
+		return "agentBareMetal"
+	}
+	return ""
 }
 
 func (ca *clusterAccumulator) setMetrics(total, installed, uninstalled, deprovisioning, conditions *prometheus.GaugeVec, mcLog log.FieldLogger) {

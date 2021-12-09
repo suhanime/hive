@@ -435,6 +435,8 @@ const (
 	// StoppingHibernationReason is used as the reason when the cluster is transitioning
 	// from a Running state to a Hibernating state.
 	StoppingHibernationReason = "Stopping"
+	// WaitingForMachinesToStopHibernatingReason is used on the Hibernating condition when waiting for cloud VMs to stop
+	WaitingForMachinesToStopHibernatingReason = "WaitingForMachinesToStop"
 	// HibernatingHibernationReason is used as the reason when the cluster is in a
 	// Hibernating state.
 	HibernatingHibernationReason = "Hibernating"
@@ -457,6 +459,8 @@ const (
 	// StoppingOrHibernatingReadyReason is used as the reason for the Ready condition when the cluster
 	// is stopping or hibernating. Precise details are available in the Hibernating condition.
 	StoppingOrHibernatingReadyReason = "StoppingOrHibernating"
+	// StartingMachinesReadyReason is used to reflect attempt to list and start cloud VMs
+	StartingMachinesReadyReason = "StartingMachines"
 	// FailedToStartMachinesReadyReason is used when there was an error starting machines
 	// to leave hibernation
 	FailedToStartMachinesReadyReason = "FailedToStartMachines"

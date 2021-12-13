@@ -109,6 +109,34 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 		{
+			name: "set powerstate for unsupported clusters",
+			cd: cdBuilder.Options(testcd.WithClusterVersion("4.3.11"),
+				testcd.WithCondition(hivev1.ClusterDeploymentCondition{
+					Type:    hivev1.ClusterHibernatingCondition,
+					Status:  corev1.ConditionFalse,
+					Reason:  hivev1.UnsupportedHibernationReason,
+					Message: "Unsupported version, need version 4.4.8 or greater"})).Build(),
+			cs: csBuilder.Build(),
+			setupActuator: func(actuator *mock.MockHibernationActuator) {
+				actuator.EXPECT().MachinesRunning(gomock.Any(), gomock.Any(), gomock.Any()).Times(1).Return(true, nil, nil)
+			},
+			setupRemote: func(builder *remoteclientmock.MockBuilder) {
+				objs := []runtime.Object{}
+				objs = append(objs, readyNodes()...)
+				objs = append(objs, readyClusterOperators()...)
+				c := fake.NewFakeClientWithScheme(scheme, objs...)
+				builder.EXPECT().Build().Times(1).Return(c, nil)
+			},
+			validate: func(t *testing.T, cd *hivev1.ClusterDeployment) {
+				cond, runCond := getHibernatingAndRunningConditions(cd)
+				require.NotNil(t, cond)
+				assert.Equal(t, hivev1.UnsupportedHibernationReason, cond.Reason)
+				require.NotNil(t, runCond)
+				assert.Equal(t, hivev1.RunningReadyReason, runCond.Reason)
+				assert.Equal(t, hivev1.RunningReadyReason, cd.Status.PowerState)
+			},
+		},
+		{
 			name: "start hibernating, older version",
 			cd:   cdBuilder.Options(o.shouldHibernate, testcd.WithClusterVersion("4.3.11")).Build(),
 			cs:   csBuilder.Build(),
@@ -177,6 +205,34 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 		{
+			name: "set powerstate for clusters with syncsets just applied",
+			cd: cdBuilder.Options(o.shouldRun,
+				testcd.WithCondition(hivev1.ClusterDeploymentCondition{
+					Type:    hivev1.ClusterHibernatingCondition,
+					Status:  corev1.ConditionFalse,
+					Reason:  hivev1.SyncSetsAppliedReason,
+					Message: "SyncSets have been applied"}),
+				testcd.WithCondition(hivev1.ClusterDeploymentCondition{
+					Type:   hivev1.ClusterReadyCondition,
+					Status: corev1.ConditionFalse,
+					Reason: hivev1.StartingMachinesReadyReason,
+				})).Build(),
+			cs: csBuilder.Build(),
+			setupActuator: func(actuator *mock.MockHibernationActuator) {
+				actuator.EXPECT().MachinesRunning(gomock.Any(), gomock.Any(), gomock.Any()).Times(1).Return(true, nil, nil)
+			},
+			setupRemote: func(builder *remoteclientmock.MockBuilder) {
+				objs := []runtime.Object{}
+				objs = append(objs, readyNodes()...)
+				objs = append(objs, readyClusterOperators()...)
+				c := fake.NewFakeClientWithScheme(scheme, objs...)
+				builder.EXPECT().Build().Times(1).Return(c, nil)
+			},
+			validate: func(t *testing.T, cd *hivev1.ClusterDeployment) {
+				assert.Equal(t, hivev1.RunningReadyReason, cd.Status.PowerState)
+			},
+		},
+		{
 			name: "start hibernating, syncsets not applied but 10 minutes have passed since cd install",
 			cd:   cdBuilder.Options(o.shouldHibernate, testcd.InstalledTimestamp(time.Now().Add(-15*time.Minute))).Build(),
 			cs:   csBuilder.Options(testcs.WithNoFirstSuccessTime()).Build(),
@@ -232,8 +288,13 @@ func TestReconcile(t *testing.T) {
 		},
 		{
 			name: "stopping, machines have stopped",
-			cd:   cdBuilder.Options(o.shouldHibernate, o.stopping).Build(),
-			cs:   csBuilder.Build(),
+			cd: cdBuilder.Options(o.shouldHibernate, o.stopping,
+				testcd.WithCondition(hivev1.ClusterDeploymentCondition{
+					Type:   hivev1.ClusterReadyCondition,
+					Status: corev1.ConditionFalse,
+					Reason: hivev1.StoppingOrHibernatingReadyReason,
+				})).Build(),
+			cs: csBuilder.Build(),
 			setupActuator: func(actuator *mock.MockHibernationActuator) {
 				actuator.EXPECT().MachinesStopped(gomock.Any(), gomock.Any(), gomock.Any()).Times(1).Return(true, nil, nil)
 			},
@@ -258,15 +319,12 @@ func TestReconcile(t *testing.T) {
 					Return(false, []string{"running-1", "pending-1", "stopping-1"}, nil)
 			},
 			validate: func(t *testing.T, cd *hivev1.ClusterDeployment) {
-				cond, runCond := getHibernatingAndRunningConditions(cd)
+				cond, _ := getHibernatingAndRunningConditions(cd)
 				require.NotNil(t, cond)
 				assert.Equal(t, corev1.ConditionFalse, cond.Status)
-				assert.Equal(t, hivev1.StoppingHibernationReason, cond.Reason)
+				assert.Equal(t, hivev1.WaitingForMachinesToStopHibernatingReason, cond.Reason)
 				assert.Equal(t, "Stopping cluster machines. Some machines have not yet stopped: pending-1,running-1,stopping-1", cond.Message)
-				assert.Equal(t, hivev1.StoppingHibernationReason, cd.Status.PowerState)
-				require.NotNil(t, runCond)
-				assert.Equal(t, corev1.ConditionFalse, runCond.Status)
-				assert.Equal(t, hivev1.StoppingOrHibernatingReadyReason, runCond.Reason)
+				assert.Equal(t, hivev1.WaitingForMachinesToStopHibernatingReason, cd.Status.PowerState)
 			},
 			expectRequeueAfter: time.Duration(time.Minute * 1),
 		},
@@ -309,8 +367,8 @@ func TestReconcile(t *testing.T) {
 				assert.Equal(t, hivev1.ResumingOrRunningHibernationReason, cond.Reason)
 				require.NotNil(t, runCond)
 				assert.Equal(t, corev1.ConditionFalse, runCond.Status)
-				assert.Equal(t, hivev1.WaitingForMachinesReadyReason, runCond.Reason)
-				assert.Equal(t, hivev1.WaitingForMachinesReadyReason, cd.Status.PowerState)
+				assert.Equal(t, hivev1.StartingMachinesReadyReason, runCond.Reason)
+				assert.Equal(t, hivev1.StartingMachinesReadyReason, cd.Status.PowerState)
 			},
 		},
 		{
@@ -358,9 +416,9 @@ func TestReconcile(t *testing.T) {
 		},
 		{
 			name: "resuming, machines have not started",
-			cd: cdBuilder.Options().Build(
+			cd: cdBuilder.Options(o.shouldRun).Build(
 				testcd.WithCondition(hibernatingCondition(corev1.ConditionFalse, hivev1.ResumingOrRunningHibernationReason, 6*time.Hour)),
-				testcd.WithCondition(readyCondition(corev1.ConditionFalse, "unused", 6*time.Hour))),
+				testcd.WithCondition(readyCondition(corev1.ConditionFalse, hivev1.StartingMachinesReadyReason, 1*time.Hour))),
 			cs: csBuilder.Build(),
 			setupActuator: func(actuator *mock.MockHibernationActuator) {
 				actuator.EXPECT().StartMachines(gomock.Any(), gomock.Any(), gomock.Any()).Times(1).Return(nil)
@@ -375,7 +433,7 @@ func TestReconcile(t *testing.T) {
 				require.NotNil(t, runCond)
 				assert.Equal(t, corev1.ConditionFalse, runCond.Status)
 				assert.Equal(t, hivev1.WaitingForMachinesReadyReason, runCond.Reason)
-				assert.Equal(t, "Starting cluster machines. Some machines are not yet running: pending-1,stopped-1 (step 1/4)", runCond.Message)
+				assert.Equal(t, "Waiting for cluster machines to start. Some machines are not yet running: pending-1,stopped-1 (step 1/4)", runCond.Message)
 				assert.Equal(t, hivev1.WaitingForMachinesReadyReason, cd.Status.PowerState)
 			},
 			expectRequeueAfter: time.Duration(time.Minute * 1),

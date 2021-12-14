@@ -350,8 +350,7 @@ func (r *hibernationReconciler) Reconcile(ctx context.Context, request reconcile
 		}
 		if shouldStopMachines(cd, hibernatingCondition) {
 			return r.stopMachines(cd, cdLog)
-		}
-		if hibernatingCondition.Reason == hivev1.StoppingHibernationReason {
+		} else {
 			return r.checkClusterStopped(cd, false, cdLog)
 		}
 	} else {
@@ -374,7 +373,6 @@ func (r *hibernationReconciler) Reconcile(ctx context.Context, request reconcile
 			return r.checkClusterRunning(cd, cdLog, readyCondition)
 		}
 	}
-	return reconcile.Result{}, nil
 }
 
 func (r *hibernationReconciler) startMachines(cd *hivev1.ClusterDeployment, logger log.FieldLogger) (reconcile.Result, error) {
@@ -388,7 +386,9 @@ func (r *hibernationReconciler) startMachines(cd *hivev1.ClusterDeployment, logg
 		clusterResumingOrRunningMsg, corev1.ConditionFalse, logger)
 	rChanged := r.setCDCondition(cd, hivev1.ClusterReadyCondition, hivev1.StartingMachinesReadyReason,
 		"Starting cluster machines (step 1/4)", corev1.ConditionFalse, logger)
-	cd.Status.PowerState = hivev1.StartingMachinesReadyReason
+	if rChanged {
+		cd.Status.PowerState = hivev1.StartingMachinesReadyReason
+	}
 	err := actuator.StartMachines(cd, r.Client, logger)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to start machines: %v", err)
@@ -416,7 +416,9 @@ func (r *hibernationReconciler) stopMachines(cd *hivev1.ClusterDeployment, logge
 		"Stopping cluster machines", corev1.ConditionFalse, logger)
 	rChanged := r.setCDCondition(cd, hivev1.ClusterReadyCondition, hivev1.StoppingOrHibernatingReadyReason,
 		clusterHibernatingMsg, corev1.ConditionFalse, logger)
-	cd.Status.PowerState = hivev1.StoppingHibernationReason
+	if changed {
+		cd.Status.PowerState = hivev1.StoppingHibernationReason
+	}
 	err := actuator.StopMachines(cd, r.Client, logger)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to stop machines: %v", err)
@@ -795,12 +797,13 @@ func shouldStopMachines(cd *hivev1.ClusterDeployment, hibernatingCondition *hive
 	if cd.Spec.PowerState != hivev1.HibernatingClusterPowerState {
 		return false
 	}
-	if hibernatingCondition.Status == corev1.ConditionTrue && hibernatingCondition.Reason == hivev1.HibernatingHibernationReason {
+	if hibernatingCondition.Status == corev1.ConditionTrue {
 		return false
 	}
 	if hibernatingCondition.Status == corev1.ConditionFalse &&
 		(hibernatingCondition.Reason == hivev1.UnsupportedHibernationReason ||
-			hibernatingCondition.Reason == hivev1.StoppingHibernationReason) {
+			hibernatingCondition.Reason == hivev1.StoppingHibernationReason ||
+			hibernatingCondition.Reason == hivev1.WaitingForMachinesToStopHibernatingReason) {
 		return false
 	}
 	return true

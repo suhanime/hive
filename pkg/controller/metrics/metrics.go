@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io/ioutil"
 	"os"
+	"reflect"
 	"strconv"
 	"time"
 
@@ -35,37 +36,37 @@ var (
 	metricClusterDeploymentsTotal = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "hive_cluster_deployments",
 		Help: "Total number of cluster deployments.",
-	}, []string{"cluster_type", "age_lt"})
+	}, []string{"cluster_type", "sts", "private_link", "managed_vpc", "age_lt"})
 	metricClusterDeploymentsInstalledTotal = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "hive_cluster_deployments_installed",
 		Help: "Total number of cluster deployments that are successfully installed.",
-	}, []string{"cluster_type", "age_lt"})
+	}, []string{"cluster_type", "sts", "private_link", "managed_vpc", "age_lt"})
 	metricClusterDeploymentsUninstalledTotal = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "hive_cluster_deployments_uninstalled",
 		Help: "Total number of cluster deployments that are not yet installed by type and bucket for length of time in this state.",
 	},
-		[]string{"cluster_type", "age_lt", "uninstalled_gt"},
+		[]string{"cluster_type", "sts", "private_link", "managed_vpc", "age_lt", "uninstalled_gt"},
 	)
 	metricClusterDeploymentsDeprovisioningTotal = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "hive_cluster_deployments_deprovisioning",
 		Help: "Total number of cluster deployments in process of being deprovisioned.",
-	}, []string{"cluster_type", "age_lt", "deprovisioning_gt"})
+	}, []string{"cluster_type", "sts", "private_link", "managed_vpc", "age_lt", "deprovisioning_gt"})
 	metricClusterDeploymentsWithConditionTotal = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "hive_cluster_deployments_conditions",
 		Help: "Total number of cluster deployments by type with conditions in their undesired state",
-	}, []string{"cluster_type", "age_lt", "condition"})
+	}, []string{"cluster_type", "sts", "private_link", "managed_vpc", "age_lt", "condition"})
 	metricInstallJobsTotal = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "hive_install_jobs",
 		Help: "Total number of install jobs running by cluster type and state.",
-	}, []string{"cluster_type", "state"})
+	}, []string{"cluster_type", "sts", "private_link", "managed_vpc", "state"})
 	metricUninstallJobsTotal = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "hive_uninstall_jobs",
 		Help: "Total number of uninstall jobs running by cluster type and state.",
-	}, []string{"cluster_type", "state"})
+	}, []string{"cluster_type", "sts", "private_link", "managed_vpc", "state"})
 	metricImagesetJobsTotal = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "hive_imageset_jobs",
 		Help: "Total number of imageset jobs running by cluster type and state.",
-	}, []string{"cluster_type", "state"})
+	}, []string{"cluster_type", "sts", "private_link", "managed_vpc", "state"})
 	metricSelectorSyncSetClustersTotal = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "hive_selectorsyncset_clusters_total",
 		Help: "Total number of SyncSetInstances that match the label selector for each SelectorSyncSet.",
@@ -91,7 +92,7 @@ var (
 			// Will clear once hive restarts.
 			Help: "Length of time a cluster has been deprovisioning.",
 		},
-		[]string{"cluster_deployment", "namespace", "cluster_type"},
+		[]string{"cluster_deployment", "namespace", "cluster_type", "sts", "private_link", "managed_vpc"},
 	)
 	// MetricClusterSyncFailingSeconds is a prometheus metric that tracks the number of seconds for which a
 	// clustersync has been in failing state
@@ -167,7 +168,7 @@ var (
 			Name: "hive_cluster_deployment_syncset_paused",
 			Help: "Whether Hive has paused syncing to the cluster",
 		},
-		[]string{"cluster_deployment", "namespace", "cluster_type"},
+		[]string{"cluster_deployment", "namespace", "cluster_type", "sts", "private_link", "managed_vpc"},
 	)
 
 	// mapMetricToDurationHistograms is a map of optional durationMetrics of type Histogram to their specific duration,
@@ -183,6 +184,13 @@ var (
 // prometheus cardinality this set of outcomes should be kept small and only used for coarse and very high value
 // categories. Controllers must report an outcome but can report unspecified if this categorization is not needed.
 type ReconcileOutcome string
+
+type metricWithLabelsAndIntValue struct {
+	labels []string
+	value  int
+	// idea for future, but should have a different mapping with an array of this struct
+	// metric prometheus.Metric
+}
 
 const (
 	ReconcileOutcomeUnspecified        ReconcileOutcome = "unspecified"
@@ -274,6 +282,9 @@ func (mc *Calculator) Start(ctx context.Context) error {
 			}
 			for _, cd := range clusterDeployments.Items {
 				clusterType := GetClusterDeploymentType(&cd)
+				sts := IsClusterTypeX(&cd, constants.STSClusterLabel)
+				privateLink := IsClusterTypeX(&cd, constants.PrivateLinkClusterLabel)
+				managedVPC := IsClusterTypeX(&cd, constants.ManagedVPCLabel)
 				accumulator.processCluster(&cd)
 
 				if cd.DeletionTimestamp != nil {
@@ -284,7 +295,10 @@ func (mc *Calculator) Start(ctx context.Context) error {
 					MetricClusterDeploymentDeprovisioningUnderwaySeconds.WithLabelValues(
 						cd.Name,
 						cd.Namespace,
-						clusterType).Set(
+						clusterType,
+						sts,
+						privateLink,
+						managedVPC).Set(
 						time.Since(cd.CreationTimestamp.Time).Seconds())
 				}
 
@@ -292,12 +306,18 @@ func (mc *Calculator) Start(ctx context.Context) error {
 					metricClusterDeploymentSyncsetPaused.WithLabelValues(
 						cd.Name,
 						cd.Namespace,
-						clusterType).Set(1.0)
+						clusterType,
+						sts,
+						privateLink,
+						managedVPC).Set(1.0)
 				} else {
 					cleared := metricClusterDeploymentSyncsetPaused.Delete(map[string]string{
 						"cluster_deployment": cd.Name,
 						"namespace":          cd.Namespace,
 						"cluster_type":       clusterType,
+						"sts":                sts,
+						"private_link":       privateLink,
+						"managed_vpc":        managedVPC,
 					})
 					if cleared {
 						mcLog.Infof("cleared metric: %v", metricClusterDeploymentSyncsetPaused)
@@ -363,14 +383,38 @@ func (mc *Calculator) Start(ctx context.Context) error {
 			log.WithError(err).Error("error listing install jobs")
 		} else {
 			runningTotal, succeededTotal, failedTotal := processJobs(installJobs.Items)
-			for k, v := range runningTotal {
-				metricInstallJobsTotal.WithLabelValues(k, stateRunning).Set(float64(v))
+			for _, v := range runningTotal {
+				clusterType := v.labels[0]
+				sts := v.labels[1]
+				privateLink := v.labels[2]
+				managedVPC := v.labels[3]
+				metricInstallJobsTotal.WithLabelValues(clusterType,
+					sts,
+					privateLink,
+					managedVPC,
+					stateRunning).Set(float64(v.value))
 			}
-			for k, v := range succeededTotal {
-				metricInstallJobsTotal.WithLabelValues(k, stateSucceeded).Set(float64(v))
+			for _, v := range succeededTotal {
+				clusterType := v.labels[0]
+				sts := v.labels[1]
+				privateLink := v.labels[2]
+				managedVPC := v.labels[3]
+				metricInstallJobsTotal.WithLabelValues(clusterType,
+					sts,
+					privateLink,
+					managedVPC,
+					stateSucceeded).Set(float64(v.value))
 			}
-			for k, v := range failedTotal {
-				metricInstallJobsTotal.WithLabelValues(k, stateFailed).Set(float64(v))
+			for _, v := range failedTotal {
+				clusterType := v.labels[0]
+				sts := v.labels[1]
+				privateLink := v.labels[2]
+				managedVPC := v.labels[3]
+				metricInstallJobsTotal.WithLabelValues(clusterType,
+					sts,
+					privateLink,
+					managedVPC,
+					stateFailed).Set(float64(v.value))
 			}
 		}
 
@@ -383,14 +427,38 @@ func (mc *Calculator) Start(ctx context.Context) error {
 			log.WithError(err).Error("error listing uninstall jobs")
 		} else {
 			runningTotal, succeededTotal, failedTotal := processJobs(uninstallJobs.Items)
-			for k, v := range runningTotal {
-				metricUninstallJobsTotal.WithLabelValues(k, stateRunning).Set(float64(v))
+			for _, v := range runningTotal {
+				clusterType := v.labels[0]
+				sts := v.labels[1]
+				privateLink := v.labels[2]
+				managedVPC := v.labels[3]
+				metricUninstallJobsTotal.WithLabelValues(clusterType,
+					sts,
+					privateLink,
+					managedVPC,
+					stateRunning).Set(float64(v.value))
 			}
-			for k, v := range succeededTotal {
-				metricUninstallJobsTotal.WithLabelValues(k, stateSucceeded).Set(float64(v))
+			for _, v := range succeededTotal {
+				clusterType := v.labels[0]
+				sts := v.labels[1]
+				privateLink := v.labels[2]
+				managedVPC := v.labels[3]
+				metricUninstallJobsTotal.WithLabelValues(clusterType,
+					sts,
+					privateLink,
+					managedVPC,
+					stateSucceeded).Set(float64(v.value))
 			}
-			for k, v := range failedTotal {
-				metricUninstallJobsTotal.WithLabelValues(k, stateFailed).Set(float64(v))
+			for _, v := range failedTotal {
+				clusterType := v.labels[0]
+				sts := v.labels[1]
+				privateLink := v.labels[2]
+				managedVPC := v.labels[3]
+				metricUninstallJobsTotal.WithLabelValues(clusterType,
+					sts,
+					privateLink,
+					managedVPC,
+					stateFailed).Set(float64(v.value))
 			}
 		}
 
@@ -403,14 +471,38 @@ func (mc *Calculator) Start(ctx context.Context) error {
 			log.WithError(err).Error("error listing imageset jobs")
 		} else {
 			runningTotal, succeededTotal, failedTotal := processJobs(imagesetJobs.Items)
-			for k, v := range runningTotal {
-				metricImagesetJobsTotal.WithLabelValues(k, stateRunning).Set(float64(v))
+			for _, v := range runningTotal {
+				clusterType := v.labels[0]
+				sts := v.labels[1]
+				privateLink := v.labels[2]
+				managedVPC := v.labels[3]
+				metricImagesetJobsTotal.WithLabelValues(clusterType,
+					sts,
+					privateLink,
+					managedVPC,
+					stateRunning).Set(float64(v.value))
 			}
-			for k, v := range succeededTotal {
-				metricImagesetJobsTotal.WithLabelValues(k, stateSucceeded).Set(float64(v))
+			for _, v := range succeededTotal {
+				clusterType := v.labels[0]
+				sts := v.labels[1]
+				privateLink := v.labels[2]
+				managedVPC := v.labels[3]
+				metricImagesetJobsTotal.WithLabelValues(clusterType,
+					sts,
+					privateLink,
+					managedVPC,
+					stateSucceeded).Set(float64(v.value))
 			}
-			for k, v := range failedTotal {
-				metricImagesetJobsTotal.WithLabelValues(k, stateFailed).Set(float64(v))
+			for _, v := range failedTotal {
+				clusterType := v.labels[0]
+				sts := v.labels[1]
+				privateLink := v.labels[2]
+				managedVPC := v.labels[3]
+				metricImagesetJobsTotal.WithLabelValues(clusterType,
+					sts,
+					privateLink,
+					managedVPC,
+					stateFailed).Set(float64(v.value))
 			}
 		}
 
@@ -530,23 +622,43 @@ func (mc *Calculator) calculateSyncSetMetrics(mcLog log.FieldLogger) {
 	metricSyncSetsUnappliedTotal.Set(float64(ssInstancesUnappliedTotal))
 }
 
-func processJobs(jobs []batchv1.Job) (runningTotal, succeededTotal, failedTotal map[string]int) {
-	running := map[string]int{}
-	failed := map[string]int{}
-	succeeded := map[string]int{}
+func processJobs(jobs []batchv1.Job) (runningTotal, succeededTotal, failedTotal []metricWithLabelsAndIntValue) {
+	var running []metricWithLabelsAndIntValue
+	var failed []metricWithLabelsAndIntValue
+	var succeeded []metricWithLabelsAndIntValue
 	for _, job := range jobs {
-		clusterType := GetClusterDeploymentType(&job)
 
 		// Sort the jobs:
 		if job.Status.Failed > 0 {
-			failed[clusterType]++
+			failed = addOrAppendToSlice(failed, job)
 		} else if job.Status.Succeeded > 0 {
-			succeeded[clusterType]++
+			succeeded = addOrAppendToSlice(succeeded, job)
 		} else {
-			running[clusterType]++
+			running = addOrAppendToSlice(running, job)
 		}
 	}
 	return running, succeeded, failed
+}
+
+func addOrAppendToSlice(slice []metricWithLabelsAndIntValue, job batchv1.Job) []metricWithLabelsAndIntValue {
+	labels := []string{
+		GetClusterDeploymentType(&job),
+		IsClusterTypeX(&job, constants.STSClusterLabel),
+		IsClusterTypeX(&job, constants.PrivateLinkClusterLabel),
+		IsClusterTypeX(&job, constants.ManagedVPCLabel),
+	}
+	if len(slice) != 0 {
+		for k, v := range slice {
+			if reflect.DeepEqual(v.labels, labels) {
+				v.value++
+				slice[k] = v
+			}
+		}
+	}
+	return append(slice, metricWithLabelsAndIntValue{
+		value:  1,
+		labels: labels,
+	})
 }
 
 // clusterAccumulator is an object used to process cluster deployments and sort them so we can

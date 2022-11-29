@@ -1,6 +1,8 @@
 package metrics
 
 import (
+	"fmt"
+	"github.com/openshift/hive/pkg/constants"
 	"testing"
 	"time"
 
@@ -131,6 +133,12 @@ func TestInstallJobs(t *testing.T) {
 	fiveMinsAgo := &metav1.Time{Time: time.Now().Add(-5 * time.Minute)}
 	jobs := []batchv1.Job{
 		{
+			ObjectMeta: metav1.ObjectMeta{
+				Labels: map[string]string{
+					constants.STSClusterLabel:   "true",
+					hivev1.HiveClusterTypeLabel: "test",
+				},
+			},
 			Status: batchv1.JobStatus{
 				StartTime:      oneHourAgo,
 				CompletionTime: fiveMinsAgo,
@@ -159,9 +167,20 @@ func TestInstallJobs(t *testing.T) {
 		},
 	}
 	running, succeeded, failed := processJobs(jobs)
-	assert.Equal(t, 2, running[hivev1.DefaultClusterType])
-	assert.Equal(t, 1, succeeded[hivev1.DefaultClusterType])
-	assert.Equal(t, 1, failed[hivev1.DefaultClusterType])
+	assert.Equal(t, []metricWithLabelsAndIntValue{
+		{
+			labels: []string{
+				"test",
+				"true",
+				"unknown",
+				"unknown",
+			},
+			value: 1,
+		},
+	}, succeeded)
+	fmt.Println(running)
+	assert.Equal(t, 2, running[0].value)
+	assert.Equal(t, 1, failed[0].value)
 }
 
 func testClusterDeployment(name, clusterType string, created metav1.Time, installed bool) hivev1.ClusterDeployment {

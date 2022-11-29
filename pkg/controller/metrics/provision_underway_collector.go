@@ -12,6 +12,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
+	"github.com/openshift/hive/pkg/constants"
 	controllerutils "github.com/openshift/hive/pkg/controller/utils"
 )
 
@@ -42,7 +43,7 @@ type provisioningUnderwayCollector struct {
 	metricClusterDeploymentProvisionUnderwaySeconds *prometheus.Desc
 }
 
-// collects the metrics for provisioningUnderwayCollector
+// Collect collects the metrics for provisioningUnderwayCollector
 func (cc provisioningUnderwayCollector) Collect(ch chan<- prometheus.Metric) {
 	ccLog := log.WithField("controller", "metrics")
 	ccLog.Info("calculating provisioning underway metrics across all ClusterDeployments")
@@ -86,6 +87,9 @@ func (cc provisioningUnderwayCollector) Collect(ch chan<- prometheus.Metric) {
 			cd.Name,
 			cd.Namespace,
 			GetClusterDeploymentType(&cd),
+			IsClusterTypeX(&cd, constants.STSClusterLabel),
+			IsClusterTypeX(&cd, constants.PrivateLinkClusterLabel),
+			IsClusterTypeX(&cd, constants.ManagedVPCLabel),
 			condition,
 			reason,
 			platform,
@@ -104,7 +108,7 @@ var (
 	metricClusterDeploymentProvisionUnderwaySecondsDesc = prometheus.NewDesc(
 		"hive_cluster_deployment_provision_underway_seconds",
 		"Length of time a cluster has been provisioning.",
-		[]string{"cluster_deployment", "namespace", "cluster_type", "condition", "reason", "platform", "image_set"},
+		[]string{"cluster_deployment", "namespace", "cluster_type", "sts", "private_link", "managed_vpc", "condition", "reason", "platform", "image_set"},
 		nil,
 	)
 )
@@ -131,7 +135,7 @@ type provisioningUnderwayInstallRestartsCollector struct {
 	metricClusterDeploymentProvisionUnderwayInstallRestarts *prometheus.Desc
 }
 
-// collects the metrics for provisioningUnderwayInstallRestartsCollector
+// Collect collects the metrics for provisioningUnderwayInstallRestartsCollector
 func (cc provisioningUnderwayInstallRestartsCollector) Collect(ch chan<- prometheus.Metric) {
 	ccLog := log.WithField("controller", "metrics")
 	ccLog.Info("calculating provisioning underway install restarts metrics across all ClusterDeployments")
@@ -179,6 +183,9 @@ func (cc provisioningUnderwayInstallRestartsCollector) Collect(ch chan<- prometh
 			cd.Name,
 			cd.Namespace,
 			GetClusterDeploymentType(&cd),
+			IsClusterTypeX(&cd, constants.STSClusterLabel),
+			IsClusterTypeX(&cd, constants.PrivateLinkClusterLabel),
+			IsClusterTypeX(&cd, constants.ManagedVPCLabel),
 			condition,
 			reason,
 			platform,
@@ -197,7 +204,7 @@ var (
 	provisioningUnderwayInstallRestartsCollectorDesc = prometheus.NewDesc(
 		"hive_cluster_deployment_provision_underway_install_restarts",
 		"Number install restarts for a cluster that has been provisioning.",
-		[]string{"cluster_deployment", "namespace", "cluster_type", "condition", "reason", "platform", "image_set"},
+		[]string{"cluster_deployment", "namespace", "cluster_type", "sts", "private_link", "managed_vpc", "condition", "reason", "platform", "image_set"},
 		nil,
 	)
 )

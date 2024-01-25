@@ -1,3 +1,27 @@
+---
+title: forward_to_azure_monitor_logs
+authors:
+- "@vparfonov"
+  reviewers:
+- "@jcantrill"
+- "@alanconway"
+  approvers:
+- "@jcantrill"
+- "@alanconway"
+  api-approvers:
+- "@jcantrill"
+- "@alanconway"
+  creation-date: 2023-11-17
+  last-updated: 2023-11-17
+  status: implementable
+  tracking-link:
+- https://issues.redhat.com/browse/LOG-4606
+  see-also:
+-
+superseded-by:
+---
+
+
 # HiveConfig.spec.metricsConfig redesign
 
 [HIVE-2344](https://issues.redhat.com/browse/HIVE-2344)

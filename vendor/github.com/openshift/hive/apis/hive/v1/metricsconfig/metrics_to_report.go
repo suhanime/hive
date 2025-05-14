@@ -1,9 +1,21 @@
 package metricsconfig
 
-type MetricsConfig struct {
-	// Optional metrics and their configurations
+import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+// MetricsToReport represents metrics that have additional customizations
+type MetricsToReport struct {
+	// 	MetricNames is a list of metrics for which the following customizations must be added, if they support the customization
+	// The name of the metric here must be valid, and it can only be present once in metricsToReport.
+	MetricNames []string `json:"metricNames"`
+	// MinimumDuration specifies the threshold duration for the metrics supplied in MetricNames, all of which must be duration based.
+	// The corresponding metrics will be logged only if the value they report exceed the threshold duration provided.
+	// For example, if a user opts-in for current clusters stopping and mentions
+	// 1 hour here, only the clusters stopping for more than an hour will be reported.
+	// This is a Duration value; see https://pkg.go.dev/time#ParseDuration for accepted formats.
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:Pattern="^([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$"
 	// +optional
-	MetricsWithDuration []MetricsWithDuration `json:"metricsWithDuration,omitempty"`
+	MinimumDuration *metav1.Duration `json:"minimumDuration,omitempty"`
 	// AdditionalClusterDeploymentLabels allows configuration of additional labels to be applied to certain metrics.
 	// The keys can be any string value suitable for a metric label (see https://prometheus.io/docs/concepts/data_model/#metric-names-and-labels).
 	// The values can be any ClusterDeployment label key (from metadata.labels). When observing an affected metric,
@@ -17,11 +29,4 @@ type MetricsConfig struct {
 	// pkg/controller/metrics/metrics_with_dynamic_labels.go
 	// +optional
 	AdditionalClusterDeploymentLabels *map[string]string `json:"additionalClusterDeploymentLabels,omitempty"`
-	// MetricsToReport cannot be used along with either MetricsWithDuration or AdditionalClusterDeploymentLabels, instead
-	// MetricsToReport.MinimumDuration or MetricsToReport.AdditionalClusterDeploymentLabels can be used.
-	// Currently, MetricsToReport works with only those metrics that are optional duration based metrics or those that allow
-	// additional cluster deployment labels. A metric must be mentioned in MetricsToReport.MetricNames in order to be published.
-	// Refer docs/hive_metrics.md for the list of metrics available and if they are supported.
-	// +optional
-	MetricsToReport []MetricsToReport `json:"metricsToReport,omitempty"`
 }

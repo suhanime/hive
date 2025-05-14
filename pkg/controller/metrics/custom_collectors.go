@@ -379,6 +379,8 @@ func (cc clusterSyncFailingCollector) Describe(ch chan<- *prometheus.Desc) {
 	prometheus.DescribeByCollect(cc, ch)
 }
 
+var metricClusterSyncFailingSeconds *prometheus.Desc
+
 func newClusterSyncFailingCollector(client client.Client, minimum time.Duration, optionalLabels map[string]string) prometheus.Collector {
 	metricName := "hive_clustersync_failing_seconds"
 	baseLabels := dynamicLabels{
@@ -394,15 +396,16 @@ func newClusterSyncFailingCollector(client client.Client, minimum time.Duration,
 		dynamicLabels: baseLabels,
 		labelList:     baseLabels.getLabelList(),
 	}
+	metricClusterSyncFailingSeconds = prometheus.NewDesc(
+		metricName,
+		"Length of time a clustersync has been failing",
+		labels.labelList,
+		nil,
+	)
 	return clusterSyncFailingCollector{
-		client: client,
-		metricClusterSyncFailingSeconds: prometheus.NewDesc(
-			metricName,
-			"Length of time a clustersync has been failing",
-			labels.labelList,
-			nil,
-		),
-		minDuration:   minimum,
-		dynamicLabels: labels,
+		client:                          client,
+		metricClusterSyncFailingSeconds: metricClusterSyncFailingSeconds,
+		minDuration:                     minimum,
+		dynamicLabels:                   labels,
 	}
 }

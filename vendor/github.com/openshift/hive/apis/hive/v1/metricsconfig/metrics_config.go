@@ -17,4 +17,11 @@ type MetricsConfig struct {
 	// pkg/controller/metrics/metrics_with_dynamic_labels.go
 	// +optional
 	AdditionalClusterDeploymentLabels *map[string]string `json:"additionalClusterDeploymentLabels,omitempty"`
+	// MetricsToReport cannot be used along with either MetricsWithDuration or AdditionalClusterDeploymentLabels, instead
+	// MetricsToReport.MinimumDuration or MetricsToReport.AdditionalClusterDeploymentLabels can be used.
+	// Currently, MetricsToReport works with only those metrics that are optional duration based metrics or those that allow
+	// additional cluster deployment labels. A metric must be mentioned in MetricsToReport.MetricNames in order to be published.
+	// Refer docs/hive_metrics.md for the list of metrics available and if they are supported.
+	// +optional
+	MetricsToReport []MetricsToReport `json:"metricsToReport,omitempty"`
 }

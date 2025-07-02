@@ -155,6 +155,90 @@ var (
 	// mapMetricToDurationGauges is a map of optional durationMetrics of type Gauge to their specific duration, if
 	// mentioned
 	mapMetricToDurationGauges map[*prometheus.GaugeVec]time.Duration
+
+	// Metrics reported by ClusterDeployment controller
+
+	// Metrics with additional label support. The dynamic labels will be set when we register these metrics after reading the metricsConfig.
+
+	MetricCompletedInstallJobRestarts = *NewHistogramVecWithDynamicLabels(
+		&prometheus.HistogramOpts{
+			Name:    "hive_cluster_deployment_completed_install_restart",
+			Help:    "Distribution of the number of restarts for all completed cluster installations.",
+			Buckets: []float64{0, 2, 10, 20, 50},
+		},
+		nil,
+		map[string]string{},
+	)
+	MetricClustersCreated = *NewCounterVecWithDynamicLabels(
+		&prometheus.CounterOpts{
+			Name: "hive_cluster_deployments_created_total",
+			Help: "Counter incremented every time we observe a new cluster.",
+		},
+		nil,
+		map[string]string{},
+	)
+	MetricClustersInstalled = *NewCounterVecWithDynamicLabels(
+		&prometheus.CounterOpts{
+			Name: "hive_cluster_deployments_installed_total",
+			Help: "Counter incremented every time we observe a successful installation.",
+		},
+		nil,
+		map[string]string{},
+	)
+	MetricClustersDeleted = *NewCounterVecWithDynamicLabels(
+		&prometheus.CounterOpts{
+			Name: "hive_cluster_deployments_deleted_total",
+			Help: "Counter incremented every time we observe a deleted cluster.",
+		},
+		nil,
+		map[string]string{},
+	)
+	MetricProvisionFailedTerminal = *NewCounterVecWithDynamicLabels(
+		&prometheus.CounterOpts{
+			Name: "hive_cluster_deployments_provision_failed_terminal_total",
+			Help: "Counter incremented when a cluster provision has failed and won't be retried.",
+		},
+		[]string{"clusterpool_namespacedname", "failure_reason"},
+		map[string]string{},
+	)
+
+	// Metrics reported by ClusterProvision controller. All of them have additional label support.
+	// The dynamic labels will be set when we register these metrics after reading the metricsConfig.
+
+	MetricClusterProvisionsTotal = NewCounterVecWithDynamicLabels(
+		&prometheus.CounterOpts{
+			Name: "hive_cluster_provision_results_total",
+			Help: "Counter incremented every time we observe a completed cluster provision.",
+		},
+		[]string{"result"},
+		map[string]string{},
+	)
+	MetricInstallErrors = NewCounterVecWithDynamicLabels(
+		&prometheus.CounterOpts{
+			Name: "hive_install_errors",
+			Help: "Counter incremented every time we observe certain errors strings in install logs.",
+		},
+		[]string{"reason"},
+		map[string]string{},
+	)
+	MetricInstallFailureSeconds = *NewHistogramVecWithDynamicLabels(
+		&prometheus.HistogramOpts{
+			Name:    "hive_cluster_deployment_install_failure_total_seconds",
+			Help:    "Time taken before a cluster provision failed to install",
+			Buckets: []float64{30, 120, 300, 600, 1800},
+		},
+		[]string{"platform", "region", "cluster_version", "workers", "install_attempt"},
+		map[string]string{},
+	)
+	MetricInstallSuccessSeconds = *NewHistogramVecWithDynamicLabels(
+		&prometheus.HistogramOpts{
+			Name:    "hive_cluster_deployment_install_success_total_seconds",
+			Help:    "Time taken before a cluster provision succeeded to install",
+			Buckets: []float64{1800, 2400, 3000, 3600},
+		},
+		[]string{"platform", "region", "cluster_version", "workers", "install_attempt"},
+		map[string]string{},
+	)
 )
 
 // ReconcileOutcome is used in controller "reconcile complete" log entries, and the metricControllerReconcileTime
@@ -389,6 +473,7 @@ func (mc *Calculator) Start(ctx context.Context) error {
 func (mc *Calculator) registerOptionalMetrics(mConfig *metricsconfig.MetricsConfig) {
 	mapMetricToDurationHistograms = make(map[*prometheus.HistogramVec]time.Duration)
 	mapMetricToDurationGauges = make(map[*prometheus.GaugeVec]time.Duration)
+	optionalLabels := GetOptionalClusterTypeLabels(mConfig)
 	for _, metric := range mConfig.MetricsWithDuration {
 		switch metric.Name {
 		// Histograms
@@ -409,9 +494,29 @@ func (mc *Calculator) registerOptionalMetrics(mConfig *metricsconfig.MetricsConf
 			mapMetricToDurationHistograms[MetricClusterReadyTransitionSeconds] = metric.Duration.Duration
 		// Gauges
 		case metricsconfig.CurrentClusterSyncFailing:
-			metrics.Registry.MustRegister(newClusterSyncFailingCollector(mc.Client, metric.Duration.Duration, GetOptionalClusterTypeLabels(mConfig)))
+			metrics.Registry.MustRegister(newClusterSyncFailingCollector(mc.Client, metric.Duration.Duration, optionalLabels))
 		}
 	}
+	// Set dynamic labels for metrics with additional label support and register them
+	MetricProvisionFailedTerminal.optionalLabels = optionalLabels
+	MetricCompletedInstallJobRestarts.optionalLabels = optionalLabels
+	MetricClustersCreated.optionalLabels = optionalLabels
+	MetricClustersInstalled.optionalLabels = optionalLabels
+	MetricClustersDeleted.optionalLabels = optionalLabels
+	MetricClusterProvisionsTotal.optionalLabels = optionalLabels
+	MetricInstallErrors.optionalLabels = optionalLabels
+	MetricInstallFailureSeconds.optionalLabels = optionalLabels
+	MetricInstallSuccessSeconds.optionalLabels = optionalLabels
+
+	MetricProvisionFailedTerminal.Register()
+	MetricCompletedInstallJobRestarts.Register()
+	MetricClustersCreated.Register()
+	MetricClustersInstalled.Register()
+	MetricClustersDeleted.Register()
+	MetricClusterProvisionsTotal.Register()
+	MetricInstallErrors.Register()
+	MetricInstallFailureSeconds.Register()
+	MetricInstallSuccessSeconds.Register()
 }
 
 // ShouldLogHistogramDurationMetric decides whether the corresponding duration metric of type histogram should be logged.

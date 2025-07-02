@@ -33,6 +33,7 @@ import (
 	"github.com/openshift/hive/apis/hive/v1/azure"
 	"github.com/openshift/hive/apis/hive/v1/gcp"
 	"github.com/openshift/hive/pkg/constants"
+	"github.com/openshift/hive/pkg/controller/metrics"
 	controllerutils "github.com/openshift/hive/pkg/controller/utils"
 	"github.com/openshift/hive/pkg/install"
 	k8slabels "github.com/openshift/hive/pkg/util/labels"
@@ -632,9 +633,9 @@ func (r *ReconcileClusterDeployment) reconcileCompletedProvision(cd *hivev1.Clus
 	metricInstallJobDuration.Observe(float64(jobDuration.Seconds()))
 
 	// Report a metric for the total number of install restarts:
-	metricCompletedInstallJobRestarts.Observe(cd, nil, float64(cd.Status.InstallRestarts))
+	metrics.MetricCompletedInstallJobRestarts.Observe(cd, nil, float64(cd.Status.InstallRestarts))
 
-	metricClustersInstalled.Observe(cd, nil, 1)
+	metrics.MetricClustersInstalled.Observe(cd, nil, 1)
 
 	return reconcile.Result{}, nil
 }

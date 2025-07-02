@@ -7,7 +7,6 @@ import (
 	"time"
 
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
-	"github.com/openshift/hive/apis/hive/v1/metricsconfig"
 	"github.com/openshift/hive/pkg/constants"
 	controllerutils "github.com/openshift/hive/pkg/controller/utils"
 	"github.com/openshift/hive/pkg/install"
@@ -44,7 +43,6 @@ func init() {
 	// While the metrics need not be registered for this test suite, they still need to be defined to avoid panics
 	// during the tests
 	var _ log.FieldLogger = log.WithField("controller", "clusterProvision")
-	registerMetrics(&metricsconfig.MetricsConfig{})
 }
 
 func TestClusterProvisionReconcile(t *testing.T) {

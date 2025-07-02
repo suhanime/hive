@@ -62,16 +62,6 @@ func Add(mgr manager.Manager) error {
 		logger.WithError(err).Error("could not get controller configurations")
 		return err
 	}
-	// Read the metrics config from hiveconfig and set values for mapClusterTypeLabelToValue, if present
-	mConfig, err := hivemetrics.ReadMetricsConfig()
-	if err != nil {
-		log.WithError(err).Error("error reading metrics config")
-		return err
-	}
-	// Register the metrics. This is done here to ensure we define the metrics with optional label support after we have
-	// read the hiveconfig, and we register them only once.
-	registerMetrics(mConfig)
-
 	return add(mgr, newReconciler(mgr, clientRateLimiter), concurrentReconciles, queueRateLimiter)
 }
 
@@ -384,7 +374,7 @@ func (r *ReconcileClusterProvision) reconcileSuccessfulJob(instance *hivev1.Clus
 	pLog.Info("install job succeeded")
 	result, err := r.transitionStage(instance, hivev1.ClusterProvisionStageComplete, "InstallComplete", "Install job has completed successfully", pLog)
 	if err == nil {
-		metricClusterProvisionsTotal.Observe(instance, map[string]string{"result": resultSuccess}, 1)
+		hivemetrics.MetricClusterProvisionsTotal.Observe(instance, map[string]string{"result": resultSuccess}, 1)
 	}
 	return result, err
 }
@@ -398,8 +388,8 @@ func (r *ReconcileClusterProvision) reconcileFailedJob(instance *hivev1.ClusterP
 	result, err := r.transitionStage(instance, hivev1.ClusterProvisionStageFailed, reason, message, pLog)
 	if err == nil {
 		// Increment a counter metric for this cluster type and error reason:
-		metricInstallErrors.Observe(instance, map[string]string{"reason": reason}, 1)
-		metricClusterProvisionsTotal.Observe(instance, map[string]string{"result": resultFailure}, 1)
+		hivemetrics.MetricInstallErrors.Observe(instance, map[string]string{"reason": reason}, 1)
+		hivemetrics.MetricClusterProvisionsTotal.Observe(instance, map[string]string{"result": resultFailure}, 1)
 	}
 	return result, err
 }
@@ -622,9 +612,9 @@ func (r *ReconcileClusterProvision) logProvisionSuccessFailureMetric(
 		r.logger.WithError(err).Error("error getting cluster deployment")
 		return
 	}
-	timeMetric := metricInstallFailureSeconds
+	timeMetric := hivemetrics.MetricInstallFailureSeconds
 	if stage == hivev1.ClusterProvisionStageComplete {
-		timeMetric = metricInstallSuccessSeconds
+		timeMetric = hivemetrics.MetricInstallSuccessSeconds
 	}
 	installVersion := constants.MetricLabelDefaultValue
 	// InstallVersion is set by the imageset job. Can be nil if we never ran that (e.g. minimal install mode).

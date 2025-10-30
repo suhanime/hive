@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
@@ -18,7 +19,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/diff"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -669,7 +669,7 @@ func (r *ReconcileClusterRelocate) replaceResourceIfChanged(destClient client.Cl
 		return nil
 	}
 	if logger.WithFields(nil).Logger.IsLevelEnabled(log.DebugLevel) {
-		logger.WithField("diff", diff.ObjectReflectDiff(srcObj, clearedDestObj)).
+		logger.WithField("diff", cmp.Diff(srcObj, clearedDestObj)).
 			Debug("resource in destination cluster is out of sync")
 	}
 

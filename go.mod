@@ -32,8 +32,8 @@ require (
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.37.0
-	github.com/openshift/api v0.0.0-20250313134101-8a7efbfb5316
-	github.com/openshift/build-machinery-go v0.0.0-20240613134303-8359781da660
+	github.com/openshift/api v0.0.0-20251015095338-264e80a2b6e7
+	github.com/openshift/build-machinery-go v0.0.0-20250530140348-dc5b2804eeee
 	github.com/openshift/cluster-autoscaler-operator v0.0.1-0.20250219201631-227f7537c3b4
 	github.com/openshift/generic-admission-server v1.14.1-0.20250715141119-66c5d0a9c5e6
 	github.com/openshift/hive/apis v0.0.0
@@ -322,7 +322,7 @@ require (
 	github.com/nxadm/tail v1.4.8 // indirect
 	github.com/oklog/ulid v1.3.1 // indirect
 	github.com/olekukonko/tablewriter v0.0.5 // indirect
-	github.com/openshift/client-go v0.0.0-20241203091221-452dfb8fa071 // indirect
+	github.com/openshift/client-go v0.0.0-20251015124057-db0dee36e235 // indirect
 	github.com/openshift/cloud-credential-operator v0.0.0-20240404165937-5e8812d64187 // indirect
 	github.com/ovirt/go-ovirt v0.0.0-20210809163552-d4276e35d3db // indirect
 	github.com/peterbourgon/diskv v2.0.1+incompatible // indirect
@@ -425,7 +425,6 @@ require (
 	sigs.k8s.io/kustomize/api v0.20.1 // indirect
 	sigs.k8s.io/kustomize/kyaml v0.20.1 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect
-	sigs.k8s.io/structured-merge-diff/v4 v4.6.0 // indirect
 	sigs.k8s.io/structured-merge-diff/v6 v6.3.0 // indirect
 )
 
